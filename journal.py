@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 
 import os
-
+import datetime
 
 # A library of stuff to use with "with", ie context.
 from contextlib import closing
 
 
 from flask import Flask
+from flask import render_template
 
 # g is a "local global" Flask provides.
 # This just means it's an object that stores state to pass between funx.
@@ -33,6 +34,21 @@ CREATE TABLE entries (
 )
 """
 
+# "Although the %s placeholders in the SQL look like string formatting,
+# they are not.
+# Parameters passed this way are properly escaped and safe from
+# SQL injection.
+# Only ever use this form to parameterize SQL queries in Python.
+# NEVER USE PYTHON STRING FORMATTING WITH A SQL STRING."
+
+DB_ENTRY_INSERT = """
+INSERT INTO entries (title, text, created) VALUES (%s, %s, %s)
+"""
+
+DB_ENTRIES_LIST = """
+SELECT id, title, text, created FROM entries ORDER BY created DESC
+"""
+
 
 # I still don't know what the significance of __name__ is here.
 app = Flask(__name__)
@@ -42,10 +58,12 @@ app.config['DATABASE'] = os.environ.get(
     'DATABASE_URL', 'dbname=learning_journal user=fried'
 )
 
+
 def connect_db():
     ''' Return a connection to the configured database. '''
 
     return psycopg2.connect(app.config['DATABASE'])
+
 
 def init_db():
     ''' Initialize the database using DB_SCHEMA.
@@ -60,6 +78,7 @@ def init_db():
         # Cursors do transactions.
         # Transactions must be committed before they take effect.
         db.commit()
+
 
 def get_database_connection():
 
@@ -87,6 +106,7 @@ def get_database_connection():
     # If flask.g has no db in it, this makes a new connection and
     # passes it to whatever called get_database_connection() here.
     return db
+
 
 # Teardown requests happen after the execution of a full
 # HTTP request-reponse cycle, even if the response is precluded by
@@ -121,24 +141,58 @@ def teardown_request(exception):
     db.close()
 
 
+def write_entry(title, text):
+
+    if not title or not text:
+        raise ValueError(
+            "Title and text are both required for writing an entry.")
+
+    con = get_database_connection()
+    cur = con.cursor()
+
+    # "It is best practice to store time values in UTC."
+    now = datetime.datetime.utcnow()
+
+    # Note that the set-as-required-in-psql parameter for
+    # the "created" database field is not supplied to write_entry().
+    # Instead, it's dynamically generated inside this Python and
+    # provided to the database at the time of the HTTP request, making
+    # the resulting journal entry a chimaera of
+    # HTTP, Python, and PSQL.
+    # (not counting the fathomless depths beneath our top level code)
+    cur.execute(DB_ENTRY_INSERT, [title, text, now])
+
+
+def get_all_entries():
+
+    ''' Return a list of all entries as dictionaries. '''
+
+    con = get_database_connection()
+    cur = con.cursor()
+    cur.execute(DB_ENTRIES_LIST)
+
+    keys = ('id', 'title', 'text', 'created')
+
+    # List comprehension, dictionary compilation, zippitude
+    return [dict(zip(keys, row)) for row in cur.fetchall()]
+
+    # "Get all results with cursor.fetchall().
+    # Get n results with cursor.fetchmany(size=n).
+    # Get one result with cursor.fetchone()."
+
+
 @app.route('/')
-def hello():
-    # Ahh, non-unicode default string encoding... The joys of python 2.
-    return u'Hello world!'
+def show_entries():
+
+    entries = get_all_entries()
+
+    # Kwargs shouldn't be named identically to variable names, should they?
+    return render_template('list_entries.html', entries=entries)
+
 
 if __name__ == '__main__':
 
     app.run(debug=True)
-
-
-
-
-
-
-
-
-
-
 
 
 
