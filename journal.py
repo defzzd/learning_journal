@@ -23,6 +23,10 @@ from flask import g
 
 import psycopg2
 
+# pip needs to install and freeze this.
+# Fortunately, I've now completed that.
+from passlib.hash import pbkdf2_sha256
+
 
 DB_SCHEMA = """
 DROP TABLE IF EXISTS entries;
@@ -191,6 +195,8 @@ def show_entries():
 
 
 if __name__ == '__main__':
+
+    # The run() command must always be the last thing in the file.
 
     app.run(debug=True)
 
