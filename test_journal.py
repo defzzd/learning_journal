@@ -7,7 +7,12 @@ from journal import connect_db
 from journal import get_database_connection
 from journal import init_db
 
+# The walkthrough implied this manages browser cookies when used...
+from flask import session
+
 TEST_DSN = 'dbname=test_learning_journal user=fried'
+
+SUBMIT_BTN = '<input type="submit" value="Share" name="Share"/>'
 
 
 # Used for testing isolation. The wipe half of reinitting the database.
@@ -247,6 +252,113 @@ def test_add_entries(db):
 
         # "assert that the line in entry data is also in the actual data"
         assert expected in actual
+
+
+def test_do_login_success(req_context):
+
+    username, password = ('admin', 'admin')
+
+    # In-function imports look weird and wrong.
+    # Shouldn't they be for things that might be optional
+    # and thus could be skipped? Such as not unit tests?
+    from journal import do_login
+
+    assert 'logged_in' not in session
+
+    do_login(username, password)
+
+    assert 'logged_in' in session
+
+
+def test_do_login_bad_password(req_context):
+
+    username = 'admin'
+    bad_password = 'wrongpassword'
+
+    from journal import do_login
+
+    with pytest.raises(ValueError):
+
+        do_login(username, bad_password)
+
+
+def test_do_login_bad_username(req_context):
+
+    bad_username = 'wronguser'
+    password = 'admin'
+
+    from journal import do_login
+
+    with pytest.raises(ValueError):
+
+        do_login(bad_username, password)
+
+
+def login_helper(username, password):
+
+    login_data = {
+        'username': username,
+        'password': password
+    }
+
+    client = app.test_client()
+
+    return client.post(
+        '/login', data=login_data, follow_redirects=True
+    )
+
+
+def test_start_as_anonymous(db):
+
+    client = app.test_client()
+
+    anon_home = client.get('/').data
+
+    assert SUBMIT_BTN not in anon_home
+
+
+def test_login_success(db):
+
+    # Is this unencrypted password okay because it's not deployed?
+    # The walkthrough DID say "never" store passwords unencrypted...
+    # "Anywhere".
+    username, password = ('admin', 'admin')
+
+    response = login_helper(username, password)
+
+    assert SUBMIT_BTN in response.data
+
+
+def test_login_fails(db):
+
+    username, password = ('admin', 'wrong')
+
+    response = login_helper(username, password)
+
+    assert 'Login Failed' in response.data
+
+
+def test_logout(db):
+
+    home = login_helper('admin', 'admin').data
+
+    assert SUBMIT_BTN in home
+
+    client = app.test_client()
+
+    response = client.get('/logout')
+
+    assert SUBMIT_BTN not in response.data
+    assert response.status_code == 302
+
+
+
+
+
+
+
+
+
 
 
 

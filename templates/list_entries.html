@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block body %}
+{% if session.logged_in %}
 <aside>
     <form action="{{ url_for('add_entry') }}" method="POST" class="add_entry">
       <div class="field">
@@ -15,6 +16,7 @@
       </div>
     </form>
 </aside>
+{% endif %}
 <h2>Entries</h2>
     {% for entry in entries %}
     <article class="entry" id="entry={{entry.id}}">

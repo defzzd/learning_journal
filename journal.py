@@ -14,6 +14,9 @@ from flask import request
 from flask import url_for
 from flask import redirect
 
+# for cookie handling: admin
+from flask import session
+
 # g is a "local global" Flask provides.
 # This just means it's an object that stores state to pass between funx.
 # It's a grab bag object.
@@ -29,7 +32,8 @@ import psycopg2
 
 # pip needs to install and freeze this.
 # Fortunately, I've now completed that.
-# from passlib.hash import pbkdf2_sha256
+# reference: http://pythonhosted.org/passlib/
+from passlib.hash import pbkdf2_sha256
 
 
 DB_SCHEMA = """
@@ -61,9 +65,39 @@ SELECT id, title, text, created FROM entries ORDER BY created DESC
 # I still don't know what the significance of __name__ is here.
 app = Flask(__name__)
 
-# The value of the third string here called a libpq connection string.
+# The value of the third string here is called a libpq connection string.
 app.config['DATABASE'] = os.environ.get(
     'DATABASE_URL', 'dbname=learning_journal user=fried'
+)
+
+# "You could implement an entire database table for
+# the purpose of storing your user information, but really that’s
+# overkill for a system that only has one user.
+# You should never implement more code than you need."
+
+# "So how can you solve the problem of storing the data
+# needed to authenticate a user?"
+
+# "How about configuration?"
+app.config['ADMIN_USERNAME'] = os.environ.get(
+    'ADMIN_USERNAME', 'admin'
+)
+
+# "Because you are using the same pattern for this configuration as for
+# the database connection string, you’ll be able to use
+# Environment Variables on your Heroku machine to store the username
+# and password for your live site in a reasonably secure fashion."
+app.config['ADMIN_PASSWORD'] = os.environ.get(
+    'ADMIN_PASSWORD', pbkdf2_sha256.encrypt('admin')
+)
+
+# "Flask will not allow using the session without having
+# a secret key configured. This key is used to perform
+# the encryption of the cookie sent back to the user.
+# Preventing you from using a session without one is
+# a good example of secure by default."
+app.config['SECRET_KEY'] = os.environ.get(
+    'FLASK_SECRET_KEY', 'sooperseekritvaluenooneshouldknow'
 )
 
 
@@ -202,7 +236,9 @@ def show_entries():
     return render_template('list_entries.html', entries=entries)
 
 
-## Is this out of order? Should it be above the '/' path due to first full string match search?
+# Is this out of order? Should it be above the '/' route due to
+# first full string match search?
+# ... apparently not, it's actually most-complete-string-match, I guess.
 @app.route('/add', methods=['POST'])
 def add_entry():
 
@@ -219,20 +255,57 @@ def add_entry():
     return redirect(url_for('show_entries'))
 
 
+def do_login(username='', passwd=''):
+
+    # "Do not distinguish between a bad password and a bad username.
+    # To do so is to leak sensitive information.
+    # Do not store more information
+    # than is absolutely required in a session."
+
+    if username != app.config['ADMIN_USERNAME']:
+
+        raise ValueError
+
+    # The other half of the passlib API:
+    if not pbkdf2_sha256.verify(passwd, app.config['ADMIN_PASSWORD']):
+
+        raise ValueError
+
+    session['logged_in'] = True
 
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+
+    error = None
+
+    if request.method == 'POST':
+
+        try:
+
+            do_login(request.form['username'].encode('utf-8'),
+                     request.form['password'].encode('utf-8'))
+
+        except ValueError:
+
+            error = "Login Failed"
+
+        else:
+
+            return redirect(url_for('show_entries'))
+
+    return render_template('login.html', error=error)
 
 
+@app.route('/logout')
+def logout():
 
+    session.pop('logged_in', None)
+
+    return redirect(url_for('show_entries'))
 
 
 if __name__ == '__main__':
 
     # The run() command must always be the last thing in the file.
-
     app.run(debug=True)
-
-
-
-
-
