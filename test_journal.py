@@ -1,9 +1,11 @@
-import contextlib # closing
+import contextlib  # closing
 
 import pytest
 
-import journal # app, connect_db, get_database_connection, init_db
-
+from journal import app
+from journal import connect_db
+from journal import get_database_connection
+from journal import init_db
 
 TEST_DSN = 'dbname=test_learning_journal user=fried'
 
@@ -13,13 +15,13 @@ def clear_db():
 
     # This ensures the connection is closed later.
     # Context library is all for this kind of context stuff.
-    with contextlib.closing(journal.connect_db()) as db:
+    with contextlib.closing(connect_db()) as db:
 
         # Testing is not supposed to be used with a deployed database,
         # apparently. That's where TEST_DSN's specification comes in:
         # This will all be done in the test_learning_journal db.
         # ...
-        # NOTE!! This database must be created manually on the CLI!
+        # NOTE: This database must be created manually on the CLI.
         # Done with:
         # createdb test_learning_journal
         db.cursor().execute("DROP TABLE entries")
@@ -35,8 +37,8 @@ def test_app():
     # (which is created outside of my python, on the CLI (for now))
 
     # Flask apps have config dictionaries in them by design.
-    journal.app.config['DATABASE'] = TEST_DSN
-    journal.app.config['TESTING'] = True
+    app.config['DATABASE'] = TEST_DSN
+    app.config['TESTING'] = True
 
 
 # "The fixture function is defined with parameters.
@@ -49,20 +51,16 @@ def db(test_app, request):
 
     # This is the "fixture function" with its "registered fixture" parameters.
     # The request parameter is a fixture that pytest gives you; you use it
-    # to connect the cleanuo() function to the db fixture.
+    # to connect the cleanup() function to the db fixture.
 
-    journal.init_db()
+    init_db()
 
     # Unexplained methods: cleardb addfinalizer cleanup
 
-    # This here is a closure?
-    # Or is it just using some dark magic from the pytest decorator?
-    # ...
     # "The request parameter is a fixture that pytest registers.
     # You use it to connect the cleanup function to the db fixture.
     # This means that cleanup will be run after tests are complete
     # as a tear-down action."
-    # I really wish this was namespaced so this stuff was clearer.
     def cleanup():
         clear_db()
 
@@ -77,18 +75,18 @@ def db(test_app, request):
 @pytest.yield_fixture(scope='function')
 def req_context(db):
 
-    ''' Run tests within a test request context so that 'g' is present.  '''
+    ''' Run tests within a test request context so that 'g' is present. '''
 
     # Wait... flask.g would not be available if we didn't make this
-    # "request context" function??
+    # "request context" function?
 
-    with journal.app.test_request_context('/'):
+    with app.test_request_context('/'):
 
         # First, yield nothing.
         # Wat.
         yield
 
-        con = journal.get_database_connection()
+        con = get_database_connection()
         con.rollback()
 
         # "Flask creates g when a cycle begines, but tests
@@ -111,15 +109,13 @@ def req_context(db):
         # statement is executed as the tear-down action."
 
 
-
-
 # Now begins the testing of the database schema.
 def run_independent_query(query, params=[]):
 
     # This function simply formalizes what I've been doing all along
     # to make DB queries inside Python.
 
-    con = journal.get_database_connection()
+    con = get_database_connection()
     cur = con.cursor()
 
     cur.execute(query, params)
@@ -134,16 +130,15 @@ def test_write_entry(req_context):
     expected = ("My Title", "My Text")
 
     # Remember, star args are just how you unpack things.
-    # ((double star args unpack things inot a dict.))
+    # ((double star args unpack things into a dict.))
     write_entry(*expected)
 
     # "run_independent_query() is a 'helper function' you can re-use."
     # Where's it come from, pytest? By way of the decorator??
     rows = run_independent_query("SELECT * FROM entries")
 
-
     # Huh, so this is just assertEquals... from pytest?
-    # Maybe notm since it's its own freestanding operation?
+    # Maybe not, since it's its own freestanding operation?
     assert len(rows) == 1
 
     for val in expected:
@@ -187,7 +182,7 @@ def test_empty_listing(db):
     # the req_context fixture. Having an initialized database is enough"
     # "The data attribute of the response returned by client.get()
     # holds the full rendered HTML of our page."
-    actual = journal.app.test_client().get('/').data
+    actual = app.test_client().get('/').data
     expected = 'No entries here so far'
     assert expected in actual
 
@@ -199,21 +194,18 @@ def with_entry(db, request):
 
     expected = (u'Test Title)', u'Test Text')
 
-    with journal.app.test_request_context('/'):
+    with app.test_request_context('/'):
 
-        journal.write_entry(*expected)
+        write_entry(*expected)
 
-        journal.get_database_connection().commit()
+        get_database_connection().commit()
 
     def cleanup():
 
-        # Is THIS a callback function? Hrm, a hole in my knowledge!
-        # I'll mend it when I'm less sleepy.
-
         # NOTE: "You use a test_request_context in both setup and
         # teardown to ensure that flask.g exists."
-        with journal.app.test_request_context('/'):
-            con = journal.get_database_connection()
+        with app.test_request_context('/'):
+            con = get_database_connection()
             cur = con.cursor()
             cur.execute("DELETE FROM entries")
             con.commit()
@@ -229,17 +221,32 @@ def with_entry(db, request):
 def test_listing(with_entry):
 
     expected = with_entry
-    actual = journal.app.test_client().get('/').data
+    actual = app.test_client().get('/').data
 
     for value in expected:
 
         assert value in actual
 
 
+def test_add_entries(db):
 
+    entry_data = {
+        u'title': u'Hello',
+        u'text': u'This is a post',
+    }
 
+    # "The post method of the Flask test_client sends an HTTP POST
+    # request to the provided URL."
+    actual = app.test_client().post(
+        '/add', data=entry_data, follow_redirects=True
+    ).data
 
+    assert 'No entries here so far' not in actual
 
+    for expected in entry_data.values():
+
+        # "assert that the line in entry data is also in the actual data"
+        assert expected in actual
 
 
 

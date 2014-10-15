@@ -9,6 +9,10 @@ from contextlib import closing
 
 from flask import Flask
 from flask import render_template
+from flask import abort
+from flask import request
+from flask import url_for
+from flask import redirect
 
 # g is a "local global" Flask provides.
 # This just means it's an object that stores state to pass between funx.
@@ -25,7 +29,7 @@ import psycopg2
 
 # pip needs to install and freeze this.
 # Fortunately, I've now completed that.
-from passlib.hash import pbkdf2_sha256
+# from passlib.hash import pbkdf2_sha256
 
 
 DB_SCHEMA = """
@@ -127,22 +131,26 @@ def teardown_request(exception):
     # there is no database and there isn't supposed to be a database?
     if db is not None:
 
-        # "if there was a problem with the database, rollback any
-        # existing transaction"
-        # So teardown_request should never make a database connection,
-        # only clean up existing ones or save the database state. OK.
-        db.rollback()
+        # Wow, I missed this line for two or three days.
+        if exception and isinstance(exception, psycopg2.Error):
 
-    else:
+            # "if there was a problem with the database, rollback any
+            # existing transaction"
+            # So teardown_request should never make a database connection,
+            # only clean up existing ones or save the database state. OK.
+            db.rollback()
 
-        db.commit()
+        else:
 
-    # This will shut down the db connection inside flask.g, too, if I
-    # understand correctly.
-    # It looks like HTTP request-response cycles make a connection,
-    # do stuff in it, and then call teardown_request() to ensure it's
-    # handled cleanly.
-    db.close()
+            db.commit()
+
+        # This will shut down the db connection inside flask.g, too, if I
+        # understand correctly.
+        # It looks like HTTP request-response cycles make a connection,
+        # do stuff in it, and then call teardown_request() to ensure it's
+        # handled cleanly.
+        # Though I could be wrong about that.
+        db.close()
 
 
 def write_entry(title, text):
@@ -192,6 +200,30 @@ def show_entries():
 
     # Kwargs shouldn't be named identically to variable names, should they?
     return render_template('list_entries.html', entries=entries)
+
+
+## Is this out of order? Should it be above the '/' path due to first full string match search?
+@app.route('/add', methods=['POST'])
+def add_entry():
+
+    try:
+        write_entry(request.form['title'], request.form['text'])
+
+    except psycopg2.Error:
+
+        # This is from Flask: an HTTP error response.
+        abort(500)
+
+    # Sends you to the show_entries() view.
+    # flask.url_for() sends up the view function named its argument string.
+    return redirect(url_for('show_entries'))
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__':
