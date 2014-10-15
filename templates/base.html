@@ -6,9 +6,20 @@
         <!--[if lt IE 9]>
         <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"</script>
         <![endif]-->
+
+        <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet" type="text/css">
     </head>
     <body>
         <header>
+            <aside id="user-controls">
+                <ul>
+                {% if not session.logged_in %}
+                    <li><a href="{{ url_for('login') }}">log in</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('logout') }}">log out</a></li>
+                {% endif %}
+                </ul>
+            </aside>
             <nav>
                 <ul>
                     <li><a href="/">Home</a></li>
