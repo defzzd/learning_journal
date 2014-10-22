@@ -25,6 +25,7 @@
         <div class="entry_body">
             {{ entry.text|safe }}
         </div>
+        <a href="{{ url_for('edit_entry', entry_id=entry.id) }}">Edit</a>
     </article>
     {% else %}
     <div class="entry">

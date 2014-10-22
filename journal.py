@@ -61,6 +61,10 @@ DB_ENTRIES_LIST = """
 SELECT id, title, text, created FROM entries ORDER BY created DESC
 """
 
+DB_SINGLE_ENTRY = """
+SELECT * FROM entries WHERE id = %s
+"""
+
 
 # I still don't know what the significance of __name__ is here.
 app = Flask(__name__)
@@ -227,6 +231,30 @@ def get_all_entries():
     # Get one result with cursor.fetchone()."
 
 
+
+
+
+
+
+def get_entry(entry_id):
+
+    ''' Return a single entry from the database. '''
+
+    con = get_database_connection()
+    cur = con.cursor()
+    cur.execute(DB_SINGLE_ENTRY, [entry_id])
+
+    keys = ('id', 'title', 'text', 'created')
+
+    # List comprehension, dictionary compilation, zippitude
+    resulting_list_of_one_dictionary = [dict(zip(keys, row)) for row in cur.fetchall()]
+    return resulting_list_of_one_dictionary[0]
+
+
+
+
+
+
 @app.route('/')
 def show_entries():
 
@@ -235,6 +263,27 @@ def show_entries():
     # Kwargs shouldn't be named identically to variable names, should they?
     return render_template('list_entries.html', entries=entries)
 
+@app.route('/edit/<entry_id>')
+def edit_entry(entry_id):
+
+    entry = get_entry(entry_id)
+
+    return render_template('edit_entry.html', entry=entry)
+
+
+@app.route('/submit', methods=['POST'])  # Is this all we need? Submitting an edit takes an ID somehow... but does it take it in the URL or does that come from the HTML?
+def submit_edit():  # This probably needs an argument. Maybe.
+
+    # This function is the POST part of editing.
+    # GET first, to show edit page
+    # POST second, to submit page edits (this step is not displayed to the user)
+    # GET third, the return to the entry list
+    # The third step is probably just
+    # return redirect(url_for('show_entries'))
+    # from add_entry(), below. It will be the return of the POST function, step 2.
+
+    # pass
+    return redirect(url_for('show_entries'))
 
 # Is this out of order? Should it be above the '/' route due to
 # first full string match search?
