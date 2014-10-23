@@ -150,6 +150,13 @@ def test_write_entry(req_context):
 
         assert val in rows[0]
 
+def test_edit_entry(req_context):
+
+    from journal import edit_entry
+
+    expected = ("")
+
+
 
 def test_get_all_entries_empty(req_context):
 
