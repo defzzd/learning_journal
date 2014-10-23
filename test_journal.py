@@ -153,8 +153,14 @@ def test_write_entry(req_context):
 def test_edit_entry(req_context):
 
     from journal import edit_entry
+    from journal import write_entry
 
-    expected = ("")
+    expected = ("My Title", "My Text")
+    write_entry(*expected)
+
+    the_row_we_added = run_independent_query("SELECT * FROM entries")
+
+
 
 
 

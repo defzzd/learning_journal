@@ -65,6 +65,14 @@ DB_SINGLE_ENTRY = """
 SELECT * FROM entries WHERE id = %s
 """
 
+DB_UPDATE_TITLE = """
+UPDATE entries SET title = %s WHERE id = %s
+"""
+
+DB_UPDATE_TEXT = """
+UPDATE entries SET text = %s WHERE id = %s
+"""
+
 
 # I still don't know what the significance of __name__ is here.
 app = Flask(__name__)
@@ -231,8 +239,20 @@ def get_all_entries():
     # Get one result with cursor.fetchone()."
 
 
+@app.route('/')
+def show_entries():
+
+    entries = get_all_entries()
+
+    # TESTING
+    #print(entries)
+    # /TESTING
+
+    # Kwargs shouldn't be named identically to variable names, should they?
+    return render_template('list_entries.html', entries=entries)
 
 
+# ####### Editing Start ########
 
 
 
@@ -251,18 +271,6 @@ def get_entry(entry_id):
     return resulting_list_of_one_dictionary[0]
 
 
-
-
-
-
-@app.route('/')
-def show_entries():
-
-    entries = get_all_entries()
-
-    # Kwargs shouldn't be named identically to variable names, should they?
-    return render_template('list_entries.html', entries=entries)
-
 @app.route('/edit/<entry_id>')
 def edit_entry(entry_id):
 
@@ -271,8 +279,10 @@ def edit_entry(entry_id):
     return render_template('edit_entry.html', entry=entry)
 
 
-@app.route('/submit', methods=['POST'])  # Is this all we need? Submitting an edit takes an ID somehow... but does it take it in the URL or does that come from the HTML?
-def submit_edit():  # This probably needs an argument. Maybe.
+# This route() requires /<entry_id> in order to receive that from the HTML.
+# Without that, it can't get entry_id as a parameter. I think. From testing...
+@app.route('/submit/<entry_id>', methods=['POST'])  # Is this all we need? Submitting an edit takes an ID somehow... but does it take it in the URL or does that come from the HTML?
+def submit_edit(entry_id):  # This probably needs an argument. Maybe.
 
     # This function is the POST part of editing.
     # GET first, to show edit page
@@ -282,8 +292,67 @@ def submit_edit():  # This probably needs an argument. Maybe.
     # return redirect(url_for('show_entries'))
     # from add_entry(), below. It will be the return of the POST function, step 2.
 
-    # pass
+
+
+
+    # EDITING BRANCH note:
+    # submit_edit receives entry_id as a parameter from the edity_entry.html
+    # it also somehow receives entry.title and entry.txt from the form.
+
+
+    # pasted in the try:except block from add_entry()
+    try:
+        # was write_entry()
+        update_entry(request.form['title'], request.form['text'], entry_id)
+
+    except psycopg2.Error:
+
+        # This is from Flask: an HTTP error response.
+        abort(500)
+
+    # Sends you to the show_entries() view.
+    # flask.url_for() sends up the view function named its argument string.
     return redirect(url_for('show_entries'))
+
+
+
+    # pass
+    #return redirect(url_for('show_entries'))
+
+
+
+
+
+def update_entry(title, text, entry_id):
+
+    if not title or not text or not entry_id:
+        raise ValueError(
+            "Title, text, and entry_id are all required for updating an entry.")
+
+    con = get_database_connection()
+    cur = con.cursor()
+    cur.execute(DB_UPDATE_TITLE, [title, entry_id])
+
+    con = get_database_connection()
+    cur = con.cursor()
+    cur.execute(DB_UPDATE_TEXT, [text, entry_id])
+
+
+
+
+    # UPDATE films SET kind = 'Dramatic' WHERE kind = 'Drama';
+
+    # (x y x z)
+    # ('title' = title WHERE )
+
+
+
+
+
+
+# ######### End Editing ##########
+
+
 
 # Is this out of order? Should it be above the '/' route due to
 # first full string match search?
