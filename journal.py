@@ -27,15 +27,17 @@ from flask import session
 # distinct state or just toss it all in one big box like this...
 from flask import g
 
-
-
 # Markdown is a Flask extension that allows us
 # to preserve MarkDown tags in Python output.
 from flaskext.markdown import Markdown
 
-
-
-
+# Necessary for Flask to allow us to change
+# the properties of the flask.Flask() app constructor...
+from flask.helpers import locked_cached_property
+# ... so we can do code highlighting with Jinja2.
+import jinja2_highlight
+# Necessary for adding code highlighting:
+import string
 
 import psycopg2
 
@@ -80,7 +82,16 @@ UPDATE entries SET title = %s, text = %s WHERE id = %s
 
 
 # I still don't know what the significance of __name__ is here.
-app = Flask(__name__)
+# Code courtesy of:
+# https://github.com/tlatsas/
+#    jinja2-highlight/blob/master/examples/flask/flask-example.py
+class Jinja2HighlightEnabledFlask(Flask):
+    jinja_options_dictionary = dict(Flask.jinja_options)
+    jinja_options_dictionary.setdefault('extensions',
+                             []).append('jinja2_highlight.HighlightExtension')
+
+
+app = Jinja2HighlightEnabledFlask(__name__)
 
 # The value of the third string here is called a libpq connection string.
 app.config['DATABASE'] = os.environ.get(
@@ -275,6 +286,12 @@ def show_entries():
     session['editing'] = False
 
     entries = get_all_entries()
+
+    for each_entry in entries:
+
+        each_entry['text'] = find_and_write_code_hightlighters(each_entry['text'])
+
+
     default_entry = {'title': '', 'text': ''}
 
     # Kwargs shouldn't be named identically to variable names, should they?
@@ -366,6 +383,21 @@ def update_entry(title, text, entry_id):
     cur = con.cursor()
     cur.execute(DB_UPDATE_ENTRY, [title, text, entry_id])
 
+
+
+
+
+def find_and_write_code_hightlighters(text):
+
+    new_string_to_return = string.replace(text, '    ', "{% highlight 'python' %}")
+    new_string_to_return = string.replace(text, '\r\n', "{% endhighlight %}")
+
+    return new_string_to_return
+
+
+
+
+
 # ######### End Editing ##########
 
 # Is this out of order? Should it be above the '/' route due to
@@ -388,6 +420,7 @@ def add_entry():
 
     try:
         write_entry(request.form['title'], request.form['text'])
+        print(request.form['text'])
 
     except psycopg2.Error:
 
