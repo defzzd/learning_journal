@@ -28,6 +28,15 @@ from flask import session
 from flask import g
 
 
+
+# Markdown is a Flask extension that allows us
+# to preserve MarkDown tags in Python output.
+from flaskext.markdown import Markdown
+
+
+
+
+
 import psycopg2
 
 # pip needs to install and freeze this.
@@ -65,12 +74,8 @@ DB_SINGLE_ENTRY = """
 SELECT * FROM entries WHERE id = %s
 """
 
-DB_UPDATE_TITLE = """
-UPDATE entries SET title = %s WHERE id = %s
-"""
-
-DB_UPDATE_TEXT = """
-UPDATE entries SET text = %s WHERE id = %s
+DB_UPDATE_ENTRY = """
+UPDATE entries SET title = %s, text = %s WHERE id = %s
 """
 
 
@@ -111,6 +116,18 @@ app.config['ADMIN_PASSWORD'] = os.environ.get(
 app.config['SECRET_KEY'] = os.environ.get(
     'FLASK_SECRET_KEY', 'sooperseekritvaluenooneshouldknow'
 )
+
+
+
+# The Markdown moduleIt needs an instance associated with it.
+# It does not need to be assigned to a variable.
+Markdown(app)
+
+
+
+
+
+
 
 
 def connect_db():
@@ -242,14 +259,26 @@ def get_all_entries():
 @app.route('/')
 def show_entries():
 
-    entries = get_all_entries()
+    # When editing, list_entries.html is loaded
+    # with session['editing'] equal to True.
+    # This can create an error where the user
+    # navigates back to the home page without
+    # toggling it back to False, whereupon
+    # add_entry() could be called and failed
+    # repeatedly.
+    # Prevent this case by setting session['editing']
+    # to False every time show_entries is called.
 
-    # TESTING
-    #print(entries)
-    # /TESTING
+    # This tag does not need to exist in submit_edit()
+    # because that function pulls up a redirect
+    # for show_entries().
+    session['editing'] = False
+
+    entries = get_all_entries()
+    default_entry = {'title': '', 'text': ''}
 
     # Kwargs shouldn't be named identically to variable names, should they?
-    return render_template('list_entries.html', entries=entries)
+    return render_template('list_entries.html', entries=entries, default_entry=default_entry)
 
 
 # ####### Editing Start ########
@@ -266,17 +295,19 @@ def get_entry(entry_id):
 
     keys = ('id', 'title', 'text', 'created')
 
-    # List comprehension, dictionary compilation, zippitude
-    resulting_list_of_one_dictionary = [dict(zip(keys, row)) for row in cur.fetchall()]
-    return resulting_list_of_one_dictionary[0]
+    # <s>List comprehension,</s> dictionary compilation, zippitude
+    return dict(zip(keys, cur.fetchone()))
 
 
 @app.route('/edit/<entry_id>')
 def edit_entry(entry_id):
 
-    entry = get_entry(entry_id)
+    entries = get_all_entries()
+    default_entry = get_entry(entry_id)
 
-    return render_template('edit_entry.html', entry=entry)
+    session['editing'] = True
+
+    return render_template('list_entries.html', entries=entries, default_entry=default_entry)
 
 
 # This route() requires /<entry_id> in order to receive that from the HTML.
@@ -286,19 +317,23 @@ def submit_edit(entry_id):  # This probably needs an argument. Maybe.
 
     # This function is the POST part of editing.
     # GET first, to show edit page
-    # POST second, to submit page edits (this step is not displayed to the user)
+    # POST second, to submit page edits
+    # (this step is not displayed to the user)
     # GET third, the return to the entry list
     # The third step is probably just
     # return redirect(url_for('show_entries'))
-    # from add_entry(), below. It will be the return of the POST function, step 2.
-
-
-
+    # from add_entry(), below. It will be
+    # the return of the POST function, step 2.
 
     # EDITING BRANCH note:
     # submit_edit receives entry_id as a parameter from the edity_entry.html
     # it also somehow receives entry.title and entry.txt from the form.
 
+    # If they're not logged in, don't let them change
+    # the database using the console.
+    if not session['logged_in']:
+
+        raise Exception("Attempted to alter database without authorization")
 
     # pasted in the try:except block from add_entry()
     try:
@@ -331,34 +366,21 @@ def update_entry(title, text, entry_id):
 
     con = get_database_connection()
     cur = con.cursor()
-    cur.execute(DB_UPDATE_TITLE, [title, entry_id])
-
-    con = get_database_connection()
-    cur = con.cursor()
-    cur.execute(DB_UPDATE_TEXT, [text, entry_id])
-
-
-
-
-    # UPDATE films SET kind = 'Dramatic' WHERE kind = 'Drama';
-
-    # (x y x z)
-    # ('title' = title WHERE )
-
-
-
-
-
+    cur.execute(DB_UPDATE_ENTRY, [title, text, entry_id])
 
 # ######### End Editing ##########
-
-
 
 # Is this out of order? Should it be above the '/' route due to
 # first full string match search?
 # ... apparently not, it's actually most-complete-string-match, I guess.
 @app.route('/add', methods=['POST'])
 def add_entry():
+
+    # If they're not logged in, don't let them change
+    # the database using the console.
+    if not session['logged_in']:
+
+        raise Exception("Attempted to alter database without authorization")
 
     try:
         write_entry(request.form['title'], request.form['text'])

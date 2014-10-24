@@ -192,6 +192,29 @@ def test_get_all_entries(req_context):
         assert 'created' in entry
 
 
+def test_get_entry(req_context):
+
+    from journal import get_entry, write_entry, get_all_entries
+
+    expected = ("Get Entry Title", "Get Entry Test")
+
+    write_entry(*expected)
+
+    entries = get_all_entries()
+    assert len(entries) == 1
+
+    #entry = get_entry(0)
+
+    #assert len(entry) == 1
+
+    '''
+    assert (entry['id'] == 0)
+
+    assert expected[0] == entry['title']
+    assert expected[1] == entry['text']
+    assert 'created' in entry
+    '''
+
 def test_empty_listing(db):
 
     # "app.test_client() returns a mock HTTP client,
