@@ -17,5 +17,6 @@ Features:
 Partially copied/referenced/usefully informed by:
     http://www.postgresql.org/docs/9.1/static/sql-update.html
 
-
+    regex:
+    http://pythontesting.net/python/regex-search-replace-examples/
 
