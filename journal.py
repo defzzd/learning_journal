@@ -31,13 +31,27 @@ from flask import g
 # to preserve MarkDown tags in Python output.
 from flaskext.markdown import Markdown
 
+'''
+# This was all such overkill, and it didn't even work.
+# It turns out that putting tags on stuff that is handed
+# to the HTML as a string by Flask is not read by Jinja2
+# because Jinja2 already read the document to make the
+# HTML know where to write that string.
+
+# So instead... we're back to codehilite, this time
+# with knowledge of how to make it work with MarkDown.
+
+
 # Necessary for Flask to allow us to change
 # the properties of the flask.Flask() app constructor...
 from flask.helpers import locked_cached_property
 # ... so we can do code highlighting with Jinja2.
 import jinja2_highlight
-# Necessary for adding code highlighting:
-import string
+
+# The regular expressions library.
+# Used for adding code highlighting:
+import re
+'''
 
 import psycopg2
 
@@ -80,8 +94,7 @@ DB_UPDATE_ENTRY = """
 UPDATE entries SET title = %s, text = %s WHERE id = %s
 """
 
-
-# I still don't know what the significance of __name__ is here.
+'''
 # Code courtesy of:
 # https://github.com/tlatsas/
 #    jinja2-highlight/blob/master/examples/flask/flask-example.py
@@ -92,6 +105,16 @@ class Jinja2HighlightEnabledFlask(Flask):
 
 
 app = Jinja2HighlightEnabledFlask(__name__)
+
+# All of this singlequote comment is to be used
+# in place of the app = Flask(__name__) line below.
+'''
+
+# I still don't know what the significance of __name__ is here.
+# To learn when I have more time!
+app = Flask(__name__)
+
+
 
 # The value of the third string here is called a libpq connection string.
 app.config['DATABASE'] = os.environ.get(
@@ -132,7 +155,10 @@ app.config['SECRET_KEY'] = os.environ.get(
 
 # The Markdown moduleIt needs an instance associated with it.
 # It does not need to be assigned to a variable.
-Markdown(app)
+# The codehilite solution is courtesy of jbbrokaw:
+# https://github.com/jbbrokaw/learning_journal/blob/master/journal.py
+# It turns out codehilite is actually included in MarkDown!
+Markdown(app, extensions=['codehilite'])
 
 
 
@@ -287,10 +313,13 @@ def show_entries():
 
     entries = get_all_entries()
 
+    '''
+    # Replaced with MarkDown's codehilite extension
+    # (properly implemented this time)
     for each_entry in entries:
 
         each_entry['text'] = find_and_write_code_hightlighters(each_entry['text'])
-
+    '''
 
     default_entry = {'title': '', 'text': ''}
 
@@ -385,17 +414,21 @@ def update_entry(title, text, entry_id):
 
 
 
-
+'''
 
 def find_and_write_code_hightlighters(text):
 
-    new_string_to_return = string.replace(text, '    ', "{% highlight 'python' %}")
-    new_string_to_return = string.replace(text, '\r\n', "{% endhighlight %}")
+    # Reference:
+    # http://pythontesting.net/python/regex-search-replace-examples/
+    new_string_to_return = re.sub(r'   (.*)\r\n', r'{% highlight \'python\' %}1{% endhighlight %}\r\n', text)
+    #print(str(re.sub(r'   *\r\n', r'{% highlight \'python\' %}1{% endhighlight %}\r\n', text)))
+    #new_string_to_return = string.replace(text, '    ', "{% highlight 'python' %}")
+    #new_string_to_return = string.replace(text, '\r\n', "{% endhighlight %}\r\n")
 
     return new_string_to_return
+'''
 
-
-
+#re.sub(r'<textarea.*>(.*)</textarea>', 'Bar', s)
 
 
 # ######### End Editing ##########
