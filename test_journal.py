@@ -196,24 +196,28 @@ def test_get_entry(req_context):
 
     from journal import get_entry, write_entry, get_all_entries
 
+
+    # Verify it's empty
+    entries = get_all_entries()
+    assert len(entries) == 0
+
     expected = ("Get Entry Title", "Get Entry Test")
 
     write_entry(*expected)
 
+    # Verify it isn't empty
     entries = get_all_entries()
     assert len(entries) == 1
 
-    #entry = get_entry(0)
+    # Derive the id and use it to get_entry():
+    the_only_entry = get_entry(entries[0]['id'])
 
-    #assert len(entry) == 1
+    # I wish I had more time to do that properly, but it works.
 
-    '''
-    assert (entry['id'] == 0)
+    assert expected[0] == the_only_entry['title']
+    assert expected[1] == the_only_entry['text']
+    assert 'created' in the_only_entry
 
-    assert expected[0] == entry['title']
-    assert expected[1] == entry['text']
-    assert 'created' in entry
-    '''
 
 def test_empty_listing(db):
 
