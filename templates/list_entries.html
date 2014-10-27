@@ -2,14 +2,18 @@
 {% block body %}
 {% if session.logged_in %}
 <aside>
+    {% if session.editing %}
+    <form action="{{ url_for('submit_edit', entry_id=default_entry.id) }}" method="POST" class="edit_entry">
+    {% else %}
     <form action="{{ url_for('add_entry') }}" method="POST" class="add_entry">
+    {% endif %}
       <div class="field">
         <label for="title">Title</label>
-        <input type="text" size="30" name="title" id="title"/>
+        <input type="text" size="30" name="title" id="title" value="{{ default_entry.title }}"/>
       </div>
       <div class="field">
         <label for="text">Text</label>
-        <textarea name="text" id="text" rows="5" cols="80"></textarea>
+        <textarea name="text" id="text" rows="5" cols="80">{{ default_entry.text }}</textarea>
       </div>
       <div class="control_row">
         <input type="submit" value="Share" name="Share"/>
@@ -23,8 +27,11 @@
         <h3>{{ entry.title }}</h3>
         <p class="dateline">{{ entry.created.strftime('%b. %d, %Y') }}
         <div class="entry_body">
-            {{ entry.text|safe }}
+{{ entry.text|safe|markdown }}
         </div>
+        {% if session.logged_in %}
+        <a href="{{ url_for('edit_entry', entry_id=entry.id) }}">Edit</a>
+        {% endif %}
     </article>
     {% else %}
     <div class="entry">

@@ -150,6 +150,19 @@ def test_write_entry(req_context):
 
         assert val in rows[0]
 
+def test_edit_entry(req_context):
+
+    from journal import edit_entry
+    from journal import write_entry
+
+    expected = ("My Title", "My Text")
+    write_entry(*expected)
+
+    the_row_we_added = run_independent_query("SELECT * FROM entries")
+
+
+
+
 
 def test_get_all_entries_empty(req_context):
 
@@ -177,6 +190,33 @@ def test_get_all_entries(req_context):
         assert expected[0] == entry['title']
         assert expected[1] == entry['text']
         assert 'created' in entry
+
+
+def test_get_entry(req_context):
+
+    from journal import get_entry, write_entry, get_all_entries
+
+
+    # Verify it's empty
+    entries = get_all_entries()
+    assert len(entries) == 0
+
+    expected = ("Get Entry Title", "Get Entry Test")
+
+    write_entry(*expected)
+
+    # Verify it isn't empty
+    entries = get_all_entries()
+    assert len(entries) == 1
+
+    # Derive the id and use it to get_entry():
+    the_only_entry = get_entry(entries[0]['id'])
+
+    # I wish I had more time to do that properly, but it works.
+
+    assert expected[0] == the_only_entry['title']
+    assert expected[1] == the_only_entry['text']
+    assert 'created' in the_only_entry
 
 
 def test_empty_listing(db):

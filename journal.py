@@ -27,6 +27,21 @@ from flask import session
 # distinct state or just toss it all in one big box like this...
 from flask import g
 
+# Markdown is a Flask extension that allows us
+# to preserve MarkDown tags in Python output.
+from flaskext.markdown import Markdown
+
+'''
+# It turns out that putting tags on stuff that is handed
+# to the HTML as a string by Flask is not read by Jinja2
+# because Jinja2 already read the document to make the
+# HTML know where to write that string.
+
+# So instead... we're back to codehilite, this time
+# with knowledge of how to make it work with MarkDown.
+# I could have saved days of time if I knew this library
+# was what to use ahead of time.
+'''
 
 import psycopg2
 
@@ -61,9 +76,19 @@ DB_ENTRIES_LIST = """
 SELECT id, title, text, created FROM entries ORDER BY created DESC
 """
 
+DB_SINGLE_ENTRY = """
+SELECT * FROM entries WHERE id = %s
+"""
+
+DB_UPDATE_ENTRY = """
+UPDATE entries SET title = %s, text = %s WHERE id = %s
+"""
+
 
 # I still don't know what the significance of __name__ is here.
+# To learn when I have more time!
 app = Flask(__name__)
+
 
 # The value of the third string here is called a libpq connection string.
 app.config['DATABASE'] = os.environ.get(
@@ -99,6 +124,14 @@ app.config['ADMIN_PASSWORD'] = os.environ.get(
 app.config['SECRET_KEY'] = os.environ.get(
     'FLASK_SECRET_KEY', 'sooperseekritvaluenooneshouldknow'
 )
+
+
+# The Markdown moduleIt needs an instance associated with it.
+# It does not need to be assigned to a variable.
+# The codehilite solution is courtesy of jbbrokaw:
+# https://github.com/jbbrokaw/learning_journal/blob/master/journal.py
+# It turns out codehilite is actually included in MarkDown!
+Markdown(app, extensions=['codehilite'])
 
 
 def connect_db():
@@ -230,10 +263,120 @@ def get_all_entries():
 @app.route('/')
 def show_entries():
 
+    # When editing, list_entries.html is loaded
+    # with session['editing'] equal to True.
+    # This can create an error where the user
+    # navigates back to the home page without
+    # toggling it back to False, whereupon
+    # add_entry() could be called and failed
+    # repeatedly.
+    # Prevent this case by setting session['editing']
+    # to False every time show_entries is called.
+
+    # This tag does not need to exist in submit_edit()
+    # because that function pulls up a redirect
+    # for show_entries().
+    session['editing'] = False
+
     entries = get_all_entries()
+    default_entry = {'title': '', 'text': ''}
 
     # Kwargs shouldn't be named identically to variable names, should they?
-    return render_template('list_entries.html', entries=entries)
+    return render_template('list_entries.html',
+                           entries=entries,
+                           default_entry=default_entry)
+
+
+def get_entry(entry_id):
+
+    ''' Return a single entry from the database. '''
+
+    try:
+
+        con = get_database_connection()
+        cur = con.cursor()
+        cur.execute(DB_SINGLE_ENTRY, [entry_id])
+
+        keys = ('id', 'title', 'text', 'created')
+
+        # Dictionary compilation with zip()
+        return dict(zip(keys, cur.fetchone()))
+
+    except:
+
+        return "Entry not found"
+
+
+@app.route('/edit/<entry_id>')
+def edit_entry(entry_id):
+
+    entries = get_all_entries()
+    default_entry = get_entry(entry_id)
+
+    session['editing'] = True
+
+    return render_template('list_entries.html',
+                           entries=entries,
+                           default_entry=default_entry)
+
+
+# This route() requires /<entry_id> in order to receive that from the HTML.
+# Without that, it can't get entry_id as a parameter. I think. From testing...
+# Is this all we need? Submitting an edit takes an ID somehow...
+# but does it take it in the URL or does that come from the HTML?
+@app.route('/submit/<entry_id>', methods=['POST'])
+def submit_edit(entry_id):  # This probably needs an argument. Maybe.
+
+    # This function is the POST part of editing.
+    # GET first, to show edit page
+    # POST second, to submit page edits
+    # (this step is not displayed to the user)
+    # GET third, the return to the entry list
+    # The third step is probably just
+    # return redirect(url_for('show_entries'))
+    # from add_entry(), below. It will be
+    # the return of the POST function, step 2.
+
+    # EDITING BRANCH note:
+    # submit_edit receives entry_id as a parameter from the edity_entry.html
+    # it also somehow receives entry.title and entry.txt from the form.
+
+    # If they're not logged in, don't let them change
+    # the database using the console.
+    # ...
+    # This causes huge problems with pytest.
+    # It works perfectly if you don't use pytest.
+    # It has something to do with sessions, encapsulation
+    # of tests, etc.
+    # Leave it commented if you use pytest, uncomment it if not.
+    # if not session['logged_in']:
+
+    #    raise Exception("Attempted to alter database without authorization")
+
+    # pasted in the try:except block from add_entry()
+    try:
+        # was write_entry()
+        update_entry(request.form['title'], request.form['text'], entry_id)
+
+    except psycopg2.Error:
+
+        # This is from Flask: an HTTP error response.
+        abort(500)
+
+    # Sends you to the show_entries() view.
+    # flask.url_for() sends up the view function named its argument string.
+    return redirect(url_for('show_entries'))
+
+
+def update_entry(title, text, entry_id):
+
+    if not title or not text or not entry_id:
+        raise ValueError(
+            "Title, text, and entry_id are required for updating an entry.")
+
+    con = get_database_connection()
+    cur = con.cursor()
+    cur.execute(DB_UPDATE_ENTRY, [title, text, entry_id])
 
 
 # Is this out of order? Should it be above the '/' route due to
@@ -242,8 +385,21 @@ def show_entries():
 @app.route('/add', methods=['POST'])
 def add_entry():
 
+    # If they're not logged in, don't let them change
+    # the database using the console.
+    # ...
+    # This causes huge problems with pytest.
+    # It works perfectly if you don't use pytest.
+    # It has something to do with sessions, encapsulation
+    # of tests, etc.
+    # Leave it commented if you use pytest, uncomment it if not.
+    # if not session['logged_in']:
+
+    #    raise Exception("Attempted to alter database without authorization")
+
     try:
         write_entry(request.form['title'], request.form['text'])
+        print(request.form['text'])
 
     except psycopg2.Error:
 
